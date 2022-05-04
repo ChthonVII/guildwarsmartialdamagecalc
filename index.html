@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Guild Wars Average Damage Calculator</title>
+        <style>
+            #title{
+                text-align: center;
+                font-weight: bold;
+                font-size: 200%;
+            }
+            .pagecenter{
+                width:75%;
+                max-width:1280px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            .mainheading{
+                font-weight: bold;
+            }
+            div.settings {
+                display:grid;
+                grid-template-columns: max-content max-content;
+                grid-gap: 0.25em;
+                border: 1px solid black;
+                border-radius: 0.5em;
+                padding: 0.5em;
+                text-align:left;
+                margin-top: 1em;
+            }
+            div.settings label {
+                text-align:right;
+            }
+            input[type=number] {
+                width: 5em;
+                text-align: center;
+            }
+            #mainform{
+                display: flex;
+                flex-direction: row;
+                justify-content: space-between;
+            }
+            #chart_div{
+                border: 1px solid black;
+                border-radius: 0.5em;
+                margin-top: 1em;
+                padding: 0.25em;
+            }
+            .tooltipwrapper{
+                position:relative;
+            }
+
+            .hastooltip .istooltip {
+                position: absolute;
+                visibility: hidden;
+            }
+            
+            .hastooltip img {
+                width: 1em;
+                vertical-align: middle;
+            }
+
+            .hastooltip:hover .istooltip{
+                visibility: visible;
+                top: -2em;
+                left: -18em;
+                z-index:1;
+                display: block;
+                min-width: 17em;
+                width: 17em;
+                min-height: 3em;
+                text-decoration: none;
+                color: black;
+                background-color: #AAAAFF;
+                border-radius: 1em;
+                padding: 0.5em;
+            }
+            
+            div.lessons {
+                border: 1px solid black;
+                border-radius: 0.5em;
+                padding: 0.5em;
+                margin-top: 1em;
+            }
+        </style>
+        <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+        <script  type="text/javascript">
+            
+            // Load the Visualization API and the piechart package.
+			google.charts.load('current', {'packages':['corechart']});
+            
+            const prefixnames = [
+                "decade",
+                "vampiric",
+                "elemental",
+                "sundering",
+                "plain"
+            ];
+            
+            const weapondata = {
+                sword: {
+                    mindmg: 15,
+                    maxdmg: 22,
+                    vampbonus: 3,
+                    critbonus: 20
+                },
+                axe: {
+                    mindmg: 6,
+                    maxdmg: 28,
+                    vampbonus: 3,
+                    critbonus: 20
+                },
+                hammer: {
+                    mindmg: 19,
+                    maxdmg: 35,
+                    vampbonus: 5,
+                    critbonus: 20
+                },
+                bow: {
+                    mindmg: 15,
+                    maxdmg: 28,
+                    vampbonus: 5,
+                    critbonus: 20
+                },
+                daggers: {
+                    mindmg: 7,
+                    maxdmg: 17,
+                    vampbonus: 3,
+                    critbonus: 20
+                },
+                spear: {
+                    mindmg: 14,
+                    maxdmg: 27,
+                    vampbonus: 3,
+                    critbonus: 20
+                },
+                scythe: {
+                    mindmg: 9,
+                    maxdmg: 41,
+                    vampbonus: 5,
+                    critbonus: 5
+                }
+            }
+            
+            const armordata = {
+                warrior: {
+                    phys: 40,
+                    ele: 20,
+                    global: 20
+                },
+                ranger: {
+                    phys: 10,
+                    ele: 40,
+                    global: 10
+                },
+                monk: {
+                    phys: 0,
+                    ele: 0,
+                    global: 0
+                },
+                necromancer: {
+                    phys: 0,
+                    ele: 0,
+                    global: 0
+                },
+                mesmer: {
+                    phys: 0,
+                    ele: 0,
+                    global: 0
+                },
+                elementalist: {
+                    phys: 0,
+                    ele: 0,
+                    global: 0
+                },
+                ritualist: {
+                    phys: 0,
+                    ele: 0,
+                    global: 0
+                },
+                assassin: {
+                    phys: 10,
+                    ele: 10,
+                    global: 10
+                },
+                paragon: {
+                    phys: 20,
+                    ele: 20,
+                    global: 20
+                },
+                dervish: {
+                    phys: 10,
+                    ele: 10,
+                    global: 10
+                }
+            }
+            
+            function roundHalfToEven(input){
+                var floor = Math.floor(input);
+                var remainder = input - floor;
+                if (remainder < 0.5){
+                    return floor;
+                }
+                if (remainder > 0.5){
+                    return Math.ceil(input);
+                }
+                if ((floor % 2) == 0){
+                    return floor;
+                }
+                return Math.ceil(input);
+            }
+            
+            function calculateBaseline(level, mastery){
+                return (5 * mastery) - (3*Math.max(0, mastery - Math.floor((level+4)/2)));
+            }
+            
+            function calculateCritChance(mastery, alevel, dlevel){
+                var smastery = mastery/100;
+                return smastery + ((1 - smastery) * 0.5 * Math.pow(2, ((8*alevel) + (10*mastery) - (6*Math.max(0, mastery - Math.floor((alevel+4)/2))) - (15*dlevel) - 100)/40));
+            }
+            
+            function calculateDamage(roll, customize_bonus, inscription_bonus, baseline, armor, armor_pen){
+                armor *= (1-(armor_pen/100));
+                return roundHalfToEven(roll * (1+(customize_bonus/100)) * (1+(inscription_bonus/100)) * Math.pow(2, ((baseline - armor)/40)));
+            }
+                        
+            function calculateCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, armor_pen){
+                var roll = weapondata[weapon_type]['maxdmg'];
+                baseline += weapondata[weapon_type]['critbonus'];
+                return  calculateDamage(roll, customize_bonus, inscription_bonus, baseline, armor, armor_pen);
+            }
+            
+            function calculateNonCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, armor_pen){
+                var count = 0;
+                var accumulator = 0;
+                var minroll = weapondata[weapon_type]['mindmg'];
+                var maxroll = weapondata[weapon_type]['maxdmg'];
+                for (var roll = minroll; roll <= maxroll; roll++){
+                    accumulator += calculateDamage(roll, customize_bonus, inscription_bonus, baseline, armor, armor_pen);
+                    count++;
+                }
+                return accumulator/count;
+            }
+            
+            // vamp, sundering, elemental, decade
+            function calculateByPrefix(prefix, weapon_type, customize_bonus, inscription_bonus, baseline, phys_armor, ele_armor, holy_armor, isholydarkchaos, armor_pen, crit_chance){
+                var armor = (prefix == "elemental") ? ele_armor : phys_armor;
+                if (isholydarkchaos){
+                    armor = holy_armor;
+                }
+                var dosundermath = ((prefix == "sundering") || ((prefix == "decade") && (weapon_type != "daggers"))) ? true : false;
+                if (prefix == "decade"){
+                    baseline += 20;
+                    inscription_bonus = 0;
+                }
+                var critvalue = calculateCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, armor_pen);
+                if (dosundermath){
+                    var sundercritvalue = calculateCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, armor_pen+20);
+                    critvalue = (critvalue * 0.8) + (sundercritvalue * 0.2);
+                }
+                var normvalue = calculateNonCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, armor_pen);
+                if (dosundermath){
+                    var sundervalue = calculateNonCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, armor_pen+20);
+                    normvalue = (normvalue * 0.8) + (sundervalue * 0.2);
+                }
+                var output = (critvalue * crit_chance) + (normvalue * (1-crit_chance));
+                if (prefix == "vampiric"){
+                    output += weapondata[weapon_type]['vampbonus'];
+                }
+                return output;
+            }
+            
+            function drawTable(playerlevel, mastery, weapon_type, customize_bonus, inscription_bonus, baseline, fairAL, phys_armor_bonus, ele_armor_bonus, holy_armor_bonus, isholydarkchaos, crackedarmor, HMlvlboost, armor_pen, crit_bonus){
+                data = new google.visualization.DataTable();
+				data.addColumn("number", "Monster Level (normal mode)");
+				data.addColumn("number", "Decade");
+				data.addColumn("number", "Vampiric");
+				data.addColumn("number", "Elemental");
+				data.addColumn("number", "Sundering");
+				data.addColumn("number", "Plain");
+				
+				data.addRows(11);
+
+				var maxdmg = 0;
+				var mindmg = 1000000;
+				for (var h=0; h<11; h++){
+                    var mlvl = h+20;
+                    var critchance = calculateCritChance(mastery, playerlevel, mlvl+HMlvlboost) + crit_bonus;
+					var phys_armor = (fairAL) ? 60+phys_armor_bonus : (3*mlvl)+phys_armor_bonus;
+					var ele_armor = (fairAL) ? 60+ele_armor_bonus : (3*mlvl)+ele_armor_bonus;
+					var holy_armor = (fairAL) ? 60+holy_armor_bonus : (3*mlvl)+holy_armor_bonus;
+					if (crackedarmor){
+                        phys_armor = Math.max(60, phys_armor - 20);
+                        ele_armor = Math.max(60, ele_armor - 20);
+                        holy_armor = Math.max(60, holy_armor - 20);
+					}
+					data.setCell(h, 0, mlvl);
+					for (var i=0; i<prefixnames.length; i++){
+                        var dmg = calculateByPrefix(prefixnames[i], weapon_type, customize_bonus, inscription_bonus, baseline, phys_armor, ele_armor, holy_armor, isholydarkchaos, armor_pen, critchance);
+                        data.setCell(h, i+1, dmg);
+                        if (dmg > maxdmg){
+                            maxdmg = dmg;
+                        }
+                        if (dmg < mindmg){
+                            mindmg = dmg;
+                        }
+					}
+				}
+				
+				maxdmg = Math.ceil(maxdmg);
+				mindmg = Math.floor(mindmg);
+				if (maxdmg <= 30){
+                    mindmg = 0;
+				}
+				else if ((maxdmg - 30) < mindmg){
+                    mindmg = maxdmg - 30;
+				}
+				var tickarray = [];
+				for (var i=mindmg; i<=maxdmg; i++){
+                    tickarray.push(i);
+				}
+				
+				var options = {
+					title: 'Weapon Prefix Comparison -- Average Damage Per Hit',
+					//vAxis: {title: 'Average Damage Per Hit'},
+					vAxes: {
+                        0: {
+                            title: 'Average Damage Per Hit',
+                            ticks: tickarray,
+                            viewWindow: {
+                                min: mindmg,
+                                max: maxdmg
+                            },
+                        },
+                        // having the second Y axis makes it unable to zoom vertically :(
+                        //1: {
+                        //    title: 'Average Damage Per Hit',
+                        //    ticks: tickarray,
+                        //    viewWindow: {
+                        //        min: mindmg,
+                        //        max: maxdmg
+                        //    },
+                        //}
+                    },
+                    //series: {
+                        //0: { targetAxisIndex:0 },    
+                        //1: { targetAxisIndex:1 }
+                    //},
+					hAxis: {
+                        title: 'Monster Level (normal mode)',
+                        viewWindow: {
+                            min: 20,
+                            max: 30
+                        },
+                        ticks: [20, 21, 22, 23,24,25,26,27,28,29,30]
+                    },
+					//hAxis: {format: '#'},
+					//curveType: 'function',
+					//vAxis: {minValue: 0},
+					height:800,
+					//width: "95%",
+					legend: { position: 'top' },
+					chartArea: {top: "10%", left:"5%", width:"90%", height: "80%"},
+					//chartArea: {left:"5%", width:"70%"},
+					explorer: {
+						maxZoomOut:1,
+						//maxZoomIn:0.25,
+						keepInBounds: true,
+						axis: 'vertical'
+					}
+				};
+
+				chart = new google.visualization.LineChart(document.getElementById('chart_div'));
+				
+				chart.draw(data, options);
+
+				return;
+            }
+            
+            function recalculateEverything(){
+                var playerlevel = Number(document.getElementById('playerlevel').value);
+                 if (Number.isNaN(playerlevel)){
+                    return;
+                }
+                var mastery = Number(document.getElementById('mastery').value);
+                if (Number.isNaN(mastery)){
+                    return;
+                }
+                var strength = Number(document.getElementById('strength').value);
+                if (Number.isNaN(strength)){
+                    return;
+                }
+                var critstrikes = Number(document.getElementById('critstrikes').value);
+                if (Number.isNaN(critstrikes)){
+                    return;
+                }
+                var critskills = Number(document.getElementById('critskills').value);
+                if (Number.isNaN(critskills)){
+                    return;
+                }
+
+                var wtypeelement = document.getElementById('weapontype');
+                var weapontype = wtypeelement.options[wtypeelement.selectedIndex].value;
+                var inscription = Number(document.getElementById('inscription').value);
+                if (Number.isNaN(inscription)){
+                    return;
+                }
+                var customized = (document.getElementById('customized').checked) ? 20 : 0;
+                
+                var mclasselement = document.getElementById('monsterclass');
+                var monsterclass = mclasselement.options[mclasselement.selectedIndex].value;
+                var globalALadjustment = Number(document.getElementById('globalALadjustment').value);
+                if (Number.isNaN(globalALadjustment)){
+                    return;
+                }
+                var physALadjustment = Number(document.getElementById('physALadjustment').value);
+                if (Number.isNaN(physALadjustment)){
+                    return;
+                }
+                var eleALadjustment = Number(document.getElementById('eleALadjustment').value);
+                if (Number.isNaN(eleALadjustment)){
+                    return;
+                }
+                
+                var HMlvlboost = Number(document.getElementById('HMlvlboost').value);
+                if (Number.isNaN(HMlvlboost)){
+                    return;
+                }
+                
+                var isholydarkchaos = document.getElementById('holydarkchaos').checked;
+                
+                //var fairAL = document.getElementById('fairAL').checked;
+                var fairAL = false;
+                
+                var crackedarmor = document.getElementById('crackedarmor').checked;
+                
+                var baseline = calculateBaseline(playerlevel, mastery);
+                
+                var totalphysALbonus = armordata[monsterclass]['phys'] + globalALadjustment + physALadjustment;
+                var totaleleALbonus = armordata[monsterclass]['ele'] + globalALadjustment +eleALadjustment;
+                var totalholyALbonus = armordata[monsterclass]['global'] + globalALadjustment;
+                
+                var crit_bonus = (critstrikes + critskills)/100;
+                
+                
+                drawTable(playerlevel, mastery, weapontype, customized, inscription, baseline, fairAL, totalphysALbonus, totaleleALbonus, totalholyALbonus, isholydarkchaos, crackedarmor, HMlvlboost, strength, crit_bonus);
+                
+                return;
+                
+            }
+            
+        </script>
+    </head>
+    <body onload="recalculateEverything();">
+        <div class="pagecenter">
+            <div id="title">Guild Wars Martial Damage Calculator</div>
+            <form id="mainform">
+                <div class="settings">
+                    <span class="mainheading">Player Stats</span>
+                    <span><!--alignment dummy--></span>
+                    <label for="playerlevel">Level:</label>
+                    <span>
+                        <input type="number" id="playerlevel" name="playerlevel" value="20" min="1" max="20" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                The player's level.
+                                Affects baseline and crit chance.
+                            </span></a>
+                        </span>
+                    </span>
+                    <label for="mastery">Mastery:</label>
+                    <span>
+                        <input type="number" id="mastery" name="mastery" value="16" min="0" max="20" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                The player's attribute rank for the relevant weapon mastery.
+                                Affects baseline and crit chance.
+                            </span></a>
+                        </span>
+                    </span>
+                    <label for="strength">Strength:</label>
+                    <span>
+                        <input type="number" id="strength" name="strength" value="0" min="0" max="20" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                The player's attribute rank for Strength.
+                                Note that armor penetration from Strength only applies to <em>attack skills</em>.
+                                If you want to calculate damage for auto attacks, enter 0.
+                            </span></a>
+                        </span>
+                    </span>
+                    <label for="critstrikes">Critical Strikes:</label>
+                    <span>
+                        <input type="number" id="critstrikes" name="critstrikes" value="0" min="0" max="20" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                The player's attribute rank for Critical Strikes.
+                            </span></a>
+                        </span>
+                    </span>
+                    <label for="critskills">Crit Chance from Skills:</label>
+                    <span>
+                        <input type="number" id="critskills" name="critskills" value="0" min="0" max="20" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                Total critical hit chance granted by skills.
+                                Enter an integer value (e.g., 25, not 0.25).
+                            </span></a>
+                        </span>
+                    </span>
+                </div>
+                <div class="settings">
+                    <span class="mainheading">Weapon Stats</span>
+                    <span><!--alignment dummy--></span>
+                    <label for="weapontype">Weapon Type:</label>
+                    <select name="weapontype" id="weapontype" onchange="recalculateEverything();">
+                        <option value="sword" selected="selected">Sword</option>
+                        <option value="axe">Axe</option>
+                        <option value="hammer">Hammer</option>
+                        <option value="bow">Bow</option>
+                        <option value="daggers">Daggers</option>
+                        <option value="spear">Spear</option>
+                        <option value="scythe">Scythe</option>
+                    </select>
+                    <label for="inscription">Inscription +dmg%:</label>
+                    <span>
+                        <input type="number" id="inscription" name="inscription" value="15" min="0" max="20" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                The damage bonus supplied by the weapon's inscription or inherent infix.
+                                Enter an integer value (e.g., 15, not 0.15).
+                                (The supplied value is ignored for calculating decade weapons because of their special "20^festival" inherent infix.)
+                            </span></a>
+                        </span>
+                    </span>
+                    <label for="customized">Customized:</label>
+                    <span style="text-align:left;">
+                        <input type="checkbox" id="customized" name="customized" oninput="recalculateEverything();" checked>
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                Is this weapon customized?
+                                Provides a +20% damage bonus.
+                            </span></a>
+                        </span>
+                    </span>
+                    <label for="holydarkchaos">Deals Holy/Dark/Chaos:</label>
+                    <span style="text-align:left;">
+                        <input type="checkbox" id="holydarkchaos" name="holydarkchaos" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                Check if using a skill that converts attack damage to holy, dark, or chaos damage, or if using a weapon that inherently deals holy, dark, or chaos damage (e.g. Verdict, Sufferer).
+                            </span></a>
+                        </span>
+                    </span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                    <span><!--alignment dummy--></span>
+                </div>
+                <div class="settings">
+                    <span class="mainheading">Monster Stats</span>
+                    <span><!--alignment dummy--></span>
+                    <label for="monsterclass">Class:</label>
+                    <select name="monsterclass" id="monsterclass" onchange="recalculateEverything();">
+                        <option value="warrior">Warrior</option>
+                        <option value="ranger">Ranger</option>
+                        <option value="monk" selected="selected">Monk</option>
+                        <option value="necromancer">Necromancer</option>
+                        <option value="mesmer">Mesmer</option>
+                        <option value="elementalist">Elementalist</option>
+                        <option value="ritualist">Ritualist</option>
+                        <option value="assassin">Assassin</option>
+                        <option value="paragon">Paragon</option>
+                        <option value="dervish">Dervish</option>
+                    </select>
+                    <label for="globalALadjustment">Species Global Armor Bonus/Penalty:</label>
+                    <span>
+                        <input type="number" id="globalALadjustment" name="globalALadjustment" value="0" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                Bonus or penalty this monster has to all armor types due to its species.
+                                Consult wiki for data on specific monsters.
+                                Enter a positive number for a bonus, or a negative number for a penalty.
+                            </span></a>
+                        </span>
+                    </span>
+                    <label for="physALadjustment">Species Physical Armor Bonus/Penalty:</label>
+                    <span>
+                        <input type="number" id="physALadjustment" name="physALadjustment" value="0" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                Bonus or penalty this monster has to physical armor due to its species.
+                                Consult wiki for data on specific monsters.
+                                Use the value for the physical subtype (e.g. slashing damage) that matches your weapon.
+                                Enter a positive number for a bonus, or a negative number for a penalty.
+                            </span></a>
+                        </span>
+                    </span>
+                    <label for="eleALadjustment">Species Elemental Armor Bonus/Penalty:</label>
+                    <span>
+                        <input type="number" id="eleALadjustment" name="eleALadjustment" value="0" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                Bonus or penalty this monster has to elemental armor due to its species.
+                                Consult wiki for data on specific monsters.
+                                Use the value for the elemental subtype (e.g. fire damage) that matches your weapon.
+                                Enter a positive number for a bonus, or a negative number for a penalty.
+                            </span></a>
+                        </span>
+                    </span>
+                    <!-- Not sure this is actually a thing. Can't find good example on wiki. Might be a myth.
+                    <label for="fairAL">EotN/Beyond "Fair" Base Armor:</label>
+                    <span style="text-align:left;">
+                        <input type="checkbox" id="fairAL" name="fairAL" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                Is this a monster from EotN or GW:Beyond that has 60 base armor instead of the usual 3*monster_level?
+                            </span></a>
+                        </span>
+                    </span>
+                    -->
+                    <label for="crackedarmor">Cracked Armor:</label>
+                    <span style="text-align:left;">
+                        <input type="checkbox" id="crackedarmor" name="crackedarmor" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                Is this monster suffering from the cracked armor condition?
+                            </span></a>
+                        </span>
+                    </span>
+                    <label for="HMlvlboost">Hard Mode Level Gain:</label>
+                    <span>
+                        <input type="number" id="HMlvlboost" name="HMlvlboost" value="2" min="0" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                How many extra levels does this monster gain in hard mode?
+                                Affects crit chance.
+                                If the normal mode monster is below level 20, enter the hard mode level minus 20 and refer to the outputs for level 20.
+                                Set to 0 to calculate for normal mode.
+                                (Calculations for normal mode monsters with level less than 20 are not supported.)
+                            </span></a>
+                        </span>
+                    </span>
+                </div>
+            </form>
+            <div id="chart_div"></div>
+            <div class="lessons">
+                <span class="mainheading">Lessons</span>
+                <ul>
+                    <li>
+                        When a festival is going on, a decade weapon is the best all-around weapon.
+                    </li>
+                    <li>
+                        When a festival is not going on, a vampiric weapon is the best all-around weapon.
+                    </li>
+                    <li>
+                        When a monster has an elemental weakness, using the appropriate elemental weapon yields a <em>very large</em> damage boost, often even outperforming decade weapons.
+                        There is a very easy DPS boost to be had by simply bringing any elemental weapon on switch and using it when attacking Warrior class foes.
+                        Serious players can reap even larger DPS dividends by consulting the wiki to identify the most common elemental weakness(es) in a given zone and putting the appropriate elemental weapon(s) on switch.
+                    </li>
+                    <li>
+                        Sundering is utter trash. There exists no achievable set of parameters for which sundering outperforms vampiric.
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </body>
+</html>
