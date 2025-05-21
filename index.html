@@ -250,8 +250,7 @@
                 }
                 var dosundermath = ((prefix == "sundering") || ((prefix == "decade") && (weapon_type != "daggers"))) ? true : false;
                 if (prefix == "decade"){
-                    baseline += 20;
-                    inscription_bonus = 0;
+                    inscription_bonus = 20;
                 }
                 var critvalue = calculateCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, armor_pen);
                 if (dosundermath){
@@ -656,10 +655,7 @@
                 <span class="mainheading">Lessons</span>
                 <ul>
                     <li>
-                        When a festival is going on, a decade weapon is the best all-around weapon.
-                    </li>
-                    <li>
-                        When a festival is not going on, a vampiric weapon is the best all-around weapon.
+                        Vampiric weapon is the best all-around weapon.
                     </li>
                     <li>
                         When a monster has an elemental weakness, using the appropriate elemental weapon yields a <em>very large</em> damage boost, often even outperforming decade weapons.
@@ -668,6 +664,9 @@
                     </li>
                     <li>
                         Sundering is utter trash. There exists no achievable set of parameters for which sundering outperforms vampiric.
+                    </li>
+                    <li>
+                        Decade weapons (when a festival is going on) generally underperform vampiric, except for a few edge cases. For, a decade weapon is the best all-around weapon. (Prior to the April 15, 2025 update, Decade weapons were bugged, making them substantially better than all other options during festivals.)
                     </li>
                 </ul>
             </div>
