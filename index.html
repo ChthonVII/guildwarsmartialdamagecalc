@@ -40,6 +40,17 @@
                 flex-direction: row;
                 justify-content: space-between;
             }
+            #showhideform{
+                border: 1px solid black;
+                border-radius: 0.5em;
+                padding: 0.5em;
+                margin-top: 1em;
+            }
+            #showhideflex{
+                display: flex;
+                flex-direction: row;
+                justify-content: space-between;
+            }
             #chart_div{
                 border: 1px solid black;
                 border-radius: 0.5em;
@@ -87,14 +98,69 @@
         <script  type="text/javascript">
             
             // Load the Visualization API and the piechart package.
-			google.charts.load('current', {'packages':['corechart']});
+            google.charts.load('current', {'packages':['corechart']});
             
-            const prefixnames = [
-                "decade",
-                "vampiric",
-                "elemental",
-                "sundering",
-                "plain"
+            const modpairs = [
+                {
+                    prefix: "decade",
+                    suffix: "plain"
+                },
+                {
+                    prefix: "vampiric",
+                    suffix: "plain"
+                },
+                {
+                    prefix: "elemental",
+                    suffix: "plain"
+                },
+                {
+                    prefix: "sundering",
+                    suffix: "plain"
+                },
+                {
+                    prefix: "plain",
+                    suffix: "plain"
+                },
+                {
+                    prefix: "decade",
+                    suffix: "ofthesin"
+                },
+                {
+                    prefix: "vampiric",
+                    suffix: "ofthesin"
+                },
+                {
+                    prefix: "elemental",
+                    suffix: "ofthesin"
+                },
+                {
+                    prefix: "sundering",
+                    suffix: "ofthesin"
+                },
+                {
+                    prefix: "plain",
+                    suffix: "ofthesin"
+                },
+                {
+                    prefix: "decade",
+                    suffix: "ofthewar"
+                },
+                {
+                    prefix: "vampiric",
+                    suffix: "ofthewar"
+                },
+                {
+                    prefix: "elemental",
+                    suffix: "ofthewar"
+                },
+                {
+                    prefix: "sundering",
+                    suffix: "ofthewar"
+                },
+                {
+                    prefix: "plain",
+                    suffix: "ofthewar"
+                }
             ];
             
             const weapondata = {
@@ -250,7 +316,7 @@
             }
             
             // vamp, sundering, elemental, decade
-            function calculateByPrefix(prefix, weapon_type, customize_bonus, inscription_bonus, baseline, phys_armor, ele_armor, holy_armor, isholydarkchaos, armor_pen, crit_chance){
+            function calculateByPrefix(prefix, suffix, weapon_type, customize_bonus, inscription_bonus, baseline, phys_armor, ele_armor, holy_armor, isholydarkchaos, strength, attackskillfreq, mastery, playerlevel, mlvl, critstrikes, critskills){
                 var armor = (prefix == "elemental") ? ele_armor : phys_armor;
                 if (isholydarkchaos){
                     armor = holy_armor;
@@ -259,6 +325,19 @@
                 if (prefix == "decade"){
                     inscription_bonus = 20;
                 }
+                var armor_pen = strength;
+                if ((suffix == "ofthewar") && (strength < 5)){
+                    strength = 5;
+                    armor_pen = 5;
+                }
+                var dostrengthmath = (strength > 0) ? true : false;
+
+                var scritstrikes = critstrikes;
+                if ((suffix == "ofthesin") && (critstrikes < 5)){
+                    scritstrikes = 5;
+                }
+                var crit_chance = calculateOverallCritChance(mastery, playerlevel, mlvl, scritstrikes, critskills);
+
                 var critvalue = calculateCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, armor_pen);
                 if (dosundermath){
                     var sundercritvalue = calculateCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, armor_pen+20);
@@ -270,39 +349,67 @@
                     normvalue = (normvalue * 0.8) + (sundervalue * 0.2);
                 }
                 var output = (critvalue * crit_chance) + (normvalue * (1-crit_chance));
+
+                // if Strength, do it all again with no strength to represent auto-attacks where Strength doesn't apply
+                if (dostrengthmath){
+                    var nostr_critvalue = calculateCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, 0);
+                    if (dosundermath){
+                        var nostr_sundercritvalue = calculateCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, 20);
+                        nostr_critvalue = (nostr_critvalue * 0.8) + (nostr_sundercritvalue * 0.2);
+                    }
+                    var nostr_normvalue = calculateNonCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, 0);
+                    if (dosundermath){
+                        var nostr_sundervalue = calculateNonCritHit(weapon_type, customize_bonus, inscription_bonus, baseline, armor, 20);
+                        nostr_normvalue = (nostr_normvalue * 0.8) + (nostr_sundervalue * 0.2);
+                    }
+                    var nostr_output = (nostr_critvalue * crit_chance) + (nostr_normvalue * (1-crit_chance));
+                    output = (output * (attackskillfreq/100)) + (nostr_output * (1 - (attackskillfreq/100)));
+                }
+
                 if (prefix == "vampiric"){
                     output += weapondata[weapon_type]['vampbonus'];
                 }
                 return output;
             }
             
-            function drawTable(playerlevel, mastery, weapon_type, customize_bonus, inscription_bonus, baseline, fairAL, phys_armor_bonus, ele_armor_bonus, holy_armor_bonus, isholydarkchaos, crackedarmor, HMlvlboost, armor_pen, critstrikes, critskills){
+            function drawTable(playerlevel, mastery, weapon_type, customize_bonus, inscription_bonus, baseline, fairAL, phys_armor_bonus, ele_armor_bonus, holy_armor_bonus, isholydarkchaos, crackedarmor, HMlvlboost, strength, attackskillfreq, critstrikes, critskills){
                 data = new google.visualization.DataTable();
-				data.addColumn("number", "Monster Level (normal mode)");
-				data.addColumn("number", "Decade");
-				data.addColumn("number", "Vampiric");
-				data.addColumn("number", "Elemental");
-				data.addColumn("number", "Sundering");
-				data.addColumn("number", "Plain");
-				
-				data.addRows(11);
+                data.addColumn("number", "Monster Level (normal mode)");
+                data.addColumn("number", "Decade");
+                data.addColumn("number", "Vampiric");
+                data.addColumn("number", "Elemental");
+                data.addColumn("number", "Sundering");
+                data.addColumn("number", "Plain");
 
-				var maxdmg = 0;
-				var mindmg = 1000000;
-				for (var h=0; h<11; h++){
+                data.addColumn("number", "Decade + of the Assassin");
+                data.addColumn("number", "Vampiric + of the Assassin");
+                data.addColumn("number", "Elemental + of the Assassin");
+                data.addColumn("number", "Sundering + of the Assassin");
+                data.addColumn("number", "Plain + of the Assassin");
+
+                data.addColumn("number", "Decade + of the Warrior");
+                data.addColumn("number", "Vampiric + of the Warrior");
+                data.addColumn("number", "Elemental + of the Warrior");
+                data.addColumn("number", "Sundering + of the Warrior");
+                data.addColumn("number", "Plain + of the Warrior");
+
+                data.addRows(11);
+
+                var maxdmg = 0;
+                var mindmg = 1000000;
+                for (var h=0; h<11; h++){
                     var mlvl = h+20;
-                    var critchance = calculateOverallCritChance(mastery, playerlevel, mlvl+HMlvlboost, critstrikes, critskills);
-					var phys_armor = (fairAL) ? 60+phys_armor_bonus : (3*mlvl)+phys_armor_bonus;
-					var ele_armor = (fairAL) ? 60+ele_armor_bonus : (3*mlvl)+ele_armor_bonus;
-					var holy_armor = (fairAL) ? 60+holy_armor_bonus : (3*mlvl)+holy_armor_bonus;
-					if (crackedarmor){
+                    var phys_armor = (fairAL) ? 60+phys_armor_bonus : (3*mlvl)+phys_armor_bonus;
+                    var ele_armor = (fairAL) ? 60+ele_armor_bonus : (3*mlvl)+ele_armor_bonus;
+                    var holy_armor = (fairAL) ? 60+holy_armor_bonus : (3*mlvl)+holy_armor_bonus;
+                    if (crackedarmor){
                         phys_armor = Math.max(60, phys_armor - 20);
                         ele_armor = Math.max(60, ele_armor - 20);
                         holy_armor = Math.max(60, holy_armor - 20);
-					}
-					data.setCell(h, 0, mlvl);
-					for (var i=0; i<prefixnames.length; i++){
-                        var dmg = calculateByPrefix(prefixnames[i], weapon_type, customize_bonus, inscription_bonus, baseline, phys_armor, ele_armor, holy_armor, isholydarkchaos, armor_pen, critchance);
+                    }
+                    data.setCell(h, 0, mlvl);
+                    for (var i=0; i<modpairs.length; i++){
+                        var dmg = calculateByPrefix(modpairs[i].prefix, modpairs[i].suffix, weapon_type, customize_bonus, inscription_bonus, baseline, phys_armor, ele_armor, holy_armor, isholydarkchaos, strength, attackskillfreq, mastery, playerlevel, mlvl+HMlvlboost, critstrikes, critskills);
                         data.setCell(h, i+1, dmg);
                         if (dmg > maxdmg){
                             maxdmg = dmg;
@@ -310,26 +417,26 @@
                         if (dmg < mindmg){
                             mindmg = dmg;
                         }
-					}
-				}
-				
-				maxdmg = Math.ceil(maxdmg);
-				mindmg = Math.floor(mindmg);
-				if (maxdmg <= 30){
+                    }
+                }
+
+                maxdmg = Math.ceil(maxdmg);
+                mindmg = Math.floor(mindmg);
+                if (maxdmg <= 30){
                     mindmg = 0;
-				}
-				else if ((maxdmg - 30) < mindmg){
+                }
+                else if ((maxdmg - 30) < mindmg){
                     mindmg = maxdmg - 30;
-				}
-				var tickarray = [];
-				for (var i=mindmg; i<=maxdmg; i++){
+                }
+                var tickarray = [];
+                for (var i=mindmg; i<=maxdmg; i++){
                     tickarray.push(i);
-				}
-				
-				var options = {
-					title: 'Weapon Prefix Comparison -- Average Damage Per Hit',
-					//vAxis: {title: 'Average Damage Per Hit'},
-					vAxes: {
+                }
+
+                var options = {
+                    title: 'Weapon Prefix & Suffix Comparison -- Average Damage Per Hit',
+                    //vAxis: {title: 'Average Damage Per Hit'},
+                    vAxes: {
                         0: {
                             title: 'Average Damage Per Hit',
                             ticks: tickarray,
@@ -352,7 +459,7 @@
                         //0: { targetAxisIndex:0 },    
                         //1: { targetAxisIndex:1 }
                     //},
-					hAxis: {
+                    hAxis: {
                         title: 'Monster Level (normal mode)',
                         viewWindow: {
                             min: 20,
@@ -360,27 +467,117 @@
                         },
                         ticks: [20, 21, 22, 23,24,25,26,27,28,29,30]
                     },
-					//hAxis: {format: '#'},
-					//curveType: 'function',
-					//vAxis: {minValue: 0},
-					height:800,
-					//width: "95%",
-					legend: { position: 'top' },
-					chartArea: {top: "10%", left:"5%", width:"90%", height: "80%"},
-					//chartArea: {left:"5%", width:"70%"},
-					explorer: {
-						maxZoomOut:1,
-						//maxZoomIn:0.25,
-						keepInBounds: true,
-						axis: 'vertical'
-					}
-				};
+                    //hAxis: {format: '#'},
+                    //curveType: 'function',
+                    //vAxis: {minValue: 0},
+                    height:800,
+                    //width: "95%",
+                    legend: { position: 'top', maxLines: 4 },
+                    chartArea: {top: "10%", left:"5%", width:"90%", height: "80%"},
+                    //chartArea: {left:"5%", width:"70%"},
+                    explorer: {
+                        maxZoomOut:1,
+                        //maxZoomIn:0.25,
+                        keepInBounds: true,
+                        axis: 'vertical'
+                    }
+                };
 
-				chart = new google.visualization.LineChart(document.getElementById('chart_div'));
-				
-				chart.draw(data, options);
+                chart = new google.visualization.LineChart(document.getElementById('chart_div'));
 
-				return;
+                //how to hide columns
+                view = new google.visualization.DataView(data);
+
+                var showdecadeplain = (document.getElementById('showdecadeplain').checked);
+                var showvampplain = (document.getElementById('showvampplain').checked);
+                var showeleplain = (document.getElementById('showeleplain').checked);
+                var showsunderplain = (document.getElementById('showsunderplain').checked);
+                var showplainplain = (document.getElementById('showplainplain').checked);
+
+                var showdecadesin = (document.getElementById('showdecadesin').checked);
+                var showvampsin = (document.getElementById('showvampsin').checked);
+                var showelesin = (document.getElementById('showelesin').checked);
+                var showsundersin = (document.getElementById('showsundersin').checked);
+                var showplainsin = (document.getElementById('showplainsin').checked);
+
+                var showdecadewar = (document.getElementById('showdecadewar').checked);
+                var showvampwar = (document.getElementById('showvampwar').checked);
+                var showelewar = (document.getElementById('showelewar').checked);
+                var showsunderwar = (document.getElementById('showsunderwar').checked);
+                var showplainwar = (document.getElementById('showplainwar').checked);
+
+                // decade specialsuffixes are only bow of warrior / spear of assassin
+                if (weapon_type == "bow"){
+                    document.getElementById('showdecadewar').disabled = false;
+                }
+                else {
+                    document.getElementById('showdecadewar').checked = false;
+                    document.getElementById('showdecadewar').disabled = true;
+                    showdecadewar = false;
+                }
+                if (weapon_type == "spear"){
+                    document.getElementById('showdecadesin').disabled = false;
+                }
+                else {
+                    document.getElementById('showdecadesin').checked = false;
+                    document.getElementById('showdecadesin').disabled = true;
+                    showdecadesin = false;
+                }
+
+
+                if (!showdecadeplain){
+                    view.hideColumns([1]);
+                }
+                if (!showvampplain){
+                    view.hideColumns([2]);
+                }
+                if (!showeleplain){
+                    view.hideColumns([3]);
+                }
+                if (!showsunderplain){
+                    view.hideColumns([4]);
+                }
+                if (!showplainplain){
+                    view.hideColumns([5]);
+                }
+
+                if (!showdecadesin){
+                    view.hideColumns([6]);
+                }
+                if (!showvampsin){
+                    view.hideColumns([7]);
+                }
+                if (!showelesin){
+                    view.hideColumns([8]);
+                }
+                if (!showsundersin){
+                    view.hideColumns([9]);
+                }
+                if (!showplainsin){
+                    view.hideColumns([10]);
+                }
+
+                if (!showdecadewar){
+                    view.hideColumns([11]);
+                }
+                if (!showvampwar){
+                    view.hideColumns([12]);
+                }
+                if (!showelewar){
+                    view.hideColumns([13]);
+                }
+                if (!showsunderwar){
+                    view.hideColumns([14]);
+                }
+                if (!showplainwar){
+                    view.hideColumns([15]);
+                }
+
+
+                chart.draw(view, options);
+                //chart.draw(data, options);
+
+                return;
             }
             
             function recalculateEverything(){
@@ -394,6 +591,10 @@
                 }
                 var strength = Number(document.getElementById('strength').value);
                 if (Number.isNaN(strength)){
+                    return;
+                }
+                var attackskillfreq = Number(document.getElementById('attackskillfreq').value);
+                if (Number.isNaN(attackskillfreq)){
                     return;
                 }
                 var critstrikes = Number(document.getElementById('critstrikes').value);
@@ -446,7 +647,7 @@
                 var totaleleALbonus = armordata[monsterclass]['ele'] + globalALadjustment +eleALadjustment;
                 var totalholyALbonus = armordata[monsterclass]['global'] + globalALadjustment;
                 
-                drawTable(playerlevel, mastery, weapontype, customized, inscription, baseline, fairAL, totalphysALbonus, totaleleALbonus, totalholyALbonus, isholydarkchaos, crackedarmor, HMlvlboost, strength, critstrikes, critskills);
+                drawTable(playerlevel, mastery, weapontype, customized, inscription, baseline, fairAL, totalphysALbonus, totaleleALbonus, totalholyALbonus, isholydarkchaos, crackedarmor, HMlvlboost, strength, attackskillfreq, critstrikes, critskills);
                 
                 return;
                 
@@ -488,7 +689,16 @@
                             <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
                                 The player's attribute rank for Strength.
                                 Note that armor penetration from Strength only applies to <em>attack skills</em>.
-                                If you want to calculate damage for auto attacks, enter 0.
+                                Do <em>not</em> include Strength from "of the Warrior" weapon suffix.
+                            </span></a>
+                        </span>
+                    </span>
+                    <label for="attackskillfreq">Attack Skill Frequency:</label>
+                    <span>
+                        <input type="number" id="attackskillfreq" name="attackskillfreq" value="40" min="0" max="100" oninput="recalculateEverything();">
+                        <span class="tooltipwrapper">
+                            <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
+                                The percentage of attacks that are attack skills. Concerns the impact of Strength.
                             </span></a>
                         </span>
                     </span>
@@ -498,6 +708,7 @@
                         <span class="tooltipwrapper">
                             <a href="#" class="hastooltip"><img src="blueinfoicon.png"><span class="istooltip">
                                 The player's attribute rank for Critical Strikes.
+                                Do <em>not</em> include Critical Strikes from "of the Assassin" weapon suffix.
                             </span></a>
                         </span>
                     </span>
@@ -652,6 +863,46 @@
                             </span></a>
                         </span>
                     </span>
+                </div>
+            </form>
+            <form id="showhideform">
+                <span class="mainheading">Show</span>
+                <div id="showhideflex">
+                    <div>
+                        <input type="checkbox" id="showdecadeplain" name="showdecadeplain" oninput="recalculateEverything();" checked> <label for="showdecadeplain">Decade</label>
+                        <BR>
+                        <input type="checkbox" id="showdecadesin" name="showdecadesin" oninput="recalculateEverything();"> <label for="showdecadesin">Decade + of the Assassin</label>
+                        <BR>
+                        <input type="checkbox" id="showdecadewar" name="showdecadewar" oninput="recalculateEverything();"> <label for="showdecadewar">Decade + of the Warrior</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="showvampplain" name="showvampplain" oninput="recalculateEverything();" checked> <label for="showvampplain">Vampiric</label>
+                        <BR>
+                        <input type="checkbox" id="showvampsin" name="showvampsin" oninput="recalculateEverything();"> <label for="showvampsin">Vampiric + of the Assassin</label>
+                        <BR>
+                        <input type="checkbox" id="showvampwar" name="showvampwar" oninput="recalculateEverything();"> <label for="showvampwar">Vampiric + of the Warrior</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="showeleplain" name="showeleplain" oninput="recalculateEverything();" checked> <label for="showeleplain">Elemental</label>
+                        <BR>
+                        <input type="checkbox" id="showelesin" name="showelesin" oninput="recalculateEverything();"> <label for="showelesin">Elemental + of the Assassin</label>
+                        <BR>
+                        <input type="checkbox" id="showelewar" name="showelewar" oninput="recalculateEverything();"> <label for="showelewar">Elemental + of the Warrior</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="showsunderplain" name="showsunderplain" oninput="recalculateEverything();" checked> <label for="showsunderplain">Sundering</label>
+                        <BR>
+                        <input type="checkbox" id="showsundersin" name="showsundersin" oninput="recalculateEverything();"> <label for="showsundersin">Sundering + of the Assassin</label>
+                        <BR>
+                        <input type="checkbox" id="showsunderwar" name="showsunderwar" oninput="recalculateEverything();"> <label for="showsunderwar">Sundering + of the Warrior</label>
+                    </div>
+                    <div>
+                        <input type="checkbox" id="showplainplain" name="showplainplain" oninput="recalculateEverything();" checked> <label for="showplainplain">Plain</label>
+                        <BR>
+                        <input type="checkbox" id="showplainsin" name="showplainsin" oninput="recalculateEverything();"> <label for="showplainsin">Plain + of the Assassin</label>
+                        <BR>
+                        <input type="checkbox" id="showplainwar" name="showplainwar" oninput="recalculateEverything();"> <label for="showplainwar">Plain + of the Warrior</label>
+                    </div>
                 </div>
             </form>
             <div id="chart_div"></div>
